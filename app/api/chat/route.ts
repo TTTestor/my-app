@@ -1,26 +1,25 @@
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 
-// 1. 初始化连接器
-const client = new OpenAI({
-  apiKey: process.env.DEEPSEEK_API_KEY,
-  baseURL: "https://api.deepseek.com", 
-});
+// ❌ 以前我们在这里创建 client，这会导致构建时报错
+// const client = new OpenAI(...) 
 
 export async function POST(req: Request) {
   try {
+    // 1. ✅ 现在我们把连接器放在这里
+    // 只有当有人真的在做题求助时，才会创建连接，打包时不会运行这一行！
+    const client = new OpenAI({
+      apiKey: process.env.DEEPSEEK_API_KEY,
+      baseURL: "https://api.deepseek.com",
+    });
+
     // 2. 接收消息
     const body = await req.json();
     const { userMessage } = body;
 
-    // 👇 侦探日志开始 👇
     console.log("----------------------------------------");
-    const key = process.env.DEEPSEEK_API_KEY;
-    console.log("🔑 钥匙状态:", key ? `✅ 读到了 (前两位: ${key.substring(0, 2)}...)` : "❌ 没读到，是空的！");
     console.log("📨 用户消息:", userMessage);
-    console.log("----------------------------------------");
-    // 👆 侦探日志结束 👆
-
+    
     // 3. 发送给 DeepSeek
     const completion = await client.chat.completions.create({
       messages: [{ role: "user", content: userMessage }],
