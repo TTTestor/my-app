@@ -7,16 +7,18 @@ import "katex/dist/katex.min.css";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
-// 👇 新引入的“美颜”插件
+// 👇 引入美颜插件
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 
 interface Props {
   question: Question;
+  // 👇👇👇 1. 这里就是我们要加的汇报接口 👇👇👇
+  onResult?: (isCorrect: boolean) => void;
 }
 
-export default function QuestionCard({ question }: Props) {
+export default function QuestionCard({ question, onResult }: Props) {
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
   const [showResult, setShowResult] = useState(false);
@@ -31,6 +33,13 @@ export default function QuestionCard({ question }: Props) {
     setIsCorrect(correct);
     setShowResult(true);
 
+    // 👇👇👇 2. 这里就是汇报逻辑：立刻告诉主页面 👇👇👇
+    if (onResult) {
+      onResult(correct);
+    }
+    // 👆👆👆 新增结束
+
+    // 如果做错了，呼叫 AI 老师
     if (!correct) {
       setIsThinking(true);
       setAiExplanation("");
@@ -65,11 +74,10 @@ export default function QuestionCard({ question }: Props) {
         if (data.reply) {
           // 🔧 强制修复：如果 AI 还是用了 \[ \]，我们把它手动变成 $$
           let cleanReply = data.reply
-            .replace(/\\\[/g, '$$$') // 把 \[ 变成 $$
-            .replace(/\\\]/g, '$$$') // 把 \] 变成 $$
-            .replace(/\\\(/g, '$')   // 把 \( 变成 $
-            .replace(/\\\)/g, '$');  // 把 \) 变成 $
-            
+            .replace(/\\\[/g, '$$$') 
+            .replace(/\\\]/g, '$$$') 
+            .replace(/\\\(/g, '$')   
+            .replace(/\\\)/g, '$');  
           setAiExplanation(cleanReply);
         }
       } catch (error) {
@@ -97,7 +105,6 @@ export default function QuestionCard({ question }: Props) {
           <span>ID: {question.id}</span>
         </div>
         <CardTitle className="text-xl text-slate-900 leading-relaxed">
-           {/* 简单的公式分割渲染 */}
           {question.questionText.split("$").map((part, index) => 
             index % 2 === 1 ? <InlineMath key={index} math={part} /> : part
           )}
@@ -134,7 +141,6 @@ export default function QuestionCard({ question }: Props) {
                 {String.fromCharCode(65 + index)}
               </div>
               <div className="text-lg">
-                {/* 这里的渲染也稍微优化了一下，防止选项显示 $ 符号 */}
                 <InlineMath math={option.replace(/\$/g, '')} />
               </div>
             </div>
@@ -167,7 +173,6 @@ export default function QuestionCard({ question }: Props) {
                       <div className="h-4 bg-yellow-200/50 rounded w-full animate-pulse"></div>
                     </div>
                   ) : (
-                    // ✨ 魔法区域：把 Markdown 代码变成漂亮的文字和公式
                     <div className="prose prose-slate max-w-none text-sm leading-7">
                       <ReactMarkdown 
                         remarkPlugins={[remarkMath]} 
