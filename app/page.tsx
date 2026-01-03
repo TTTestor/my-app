@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react"; // 👈 1. 引入 useEffect
 import QuestionCard from "@/components/QuestionCard";
 import { questions } from "@/lib/data";
 import { Button } from "@/components/ui/button";
@@ -11,11 +11,29 @@ export default function Home() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isCompleted, setIsCompleted] = useState(false);
   const [mistakeIds, setMistakeIds] = useState<string[]>([]);
-  
-  // ✨ 新增开关：是否处于“错题复习模式”
   const [isReviewMode, setIsReviewMode] = useState(false);
+  
+  // ✨✨✨ 2. 新增：页面加载时，从硬盘“读档” ✨✨✨
+  useEffect(() => {
+    // 只有在浏览器端才执行
+    const savedMistakes = localStorage.getItem("my-mistakes");
+    if (savedMistakes) {
+      try {
+        setMistakeIds(JSON.parse(savedMistakes));
+        console.log("📂 成功读取存档，错题数:", JSON.parse(savedMistakes).length);
+      } catch (e) {
+        console.error("存档读取失败", e);
+      }
+    }
+  }, []); // 空数组 [] 代表只在网页刚打开时执行一次
 
-  // 🧠 核心过滤逻辑：如果是复习模式，只筛选出错题；否则筛选科目
+  // ✨✨✨ 3. 新增：每当错题变化时，自动“存档” ✨✨✨
+  useEffect(() => {
+    // 把数组转换成字符串存进去
+    localStorage.setItem("my-mistakes", JSON.stringify(mistakeIds));
+    console.log("💾 自动存档完成");
+  }, [mistakeIds]); // 监听 mistakeIds，一变就存
+
   const filteredQuestions = isReviewMode
     ? questions.filter((q) => mistakeIds.includes(q.id))
     : questions.filter((q) => selectedSubject === null || q.subject === selectedSubject);
@@ -23,10 +41,13 @@ export default function Home() {
   const currentQuestion = filteredQuestions[currentIndex];
 
   const handleQuestionResult = (isCorrect: boolean) => {
-    // 注意：复习模式下做错了，我们就不重复记录了（或者你可以选择继续记录）
     if (!isCorrect && !isReviewMode) {
       console.log("记录错题:", currentQuestion.id);
-      setMistakeIds(prev => Array.from(new Set([...prev, currentQuestion.id])));
+      setMistakeIds(prev => {
+        //以此确保最新的状态会被存入
+        const newMistakes = Array.from(new Set([...prev, currentQuestion.id]));
+        return newMistakes;
+      });
     }
   };
 
@@ -44,22 +65,31 @@ export default function Home() {
     }
   };
 
-  // 开始复习错题
   const startReview = () => {
-    setIsReviewMode(true);  // 打开复习模式开关
-    setCurrentIndex(0);     // 重置到第一题
-    setIsCompleted(false);  // 退出结算画面
+    setIsReviewMode(true);
+    setCurrentIndex(0);
+    setIsCompleted(false);
   };
 
   const goBackToLobby = () => {
     setSelectedSubject(null);
     setCurrentIndex(0);
     setIsCompleted(false);
-    setMistakeIds([]); 
-    setIsReviewMode(false); // 记得关掉复习模式
+    setIsReviewMode(false);
+    // ⚠️ 注意：回到大厅时，我们不再清空错题本了！
+    // setMistakeIds([]);  <-- 这行删掉了，为了保留记忆
   };
 
-  // 🟢 场景一：科目大厅
+  // ✨ 强力重置：连硬盘里的数据一起删掉
+  const fullReset = () => {
+    setIsCompleted(false);
+    setCurrentIndex(0);
+    setMistakeIds([]);
+    setIsReviewMode(false);
+    localStorage.removeItem("my-mistakes"); // 🗑️ 彻底清空硬盘
+  };
+
+  // 场景一：科目大厅
   if (!selectedSubject) {
     return (
       <main className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
@@ -76,17 +106,29 @@ export default function Home() {
               <FlaskConical className="w-8 h-8 mr-4" /> 化学
             </Button>
           </div>
+          
+          {/* 在大厅也能看到有多少错题待复习 */}
+          {mistakeIds.length > 0 && (
+             <div className="mt-8 p-4 bg-orange-50 rounded-lg border border-orange-200 text-orange-800 animate-in fade-in slide-in-from-bottom-4">
+               <p className="font-bold flex items-center justify-center gap-2">
+                 <AlertCircle className="w-5 h-5"/>
+                 你还有 {mistakeIds.length} 道错题未攻克
+               </p>
+               <Button variant="link" className="text-orange-600 underline mt-1" onClick={() => {setSelectedSubject("物理"); startReview();}}>
+                 直接开始复习 &rarr;
+               </Button>
+             </div>
+          )}
         </div>
       </main>
     );
   }
 
-  // 🟢 场景二：结算画面
+  // 场景二：结算画面
   if (isCompleted) {
     return (
       <main className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-white p-8 rounded-2xl shadow-xl text-center space-y-6">
-          {/* 如果是复习模式通关了，显示特殊的庆祝 */}
           {isReviewMode ? (
              <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto text-blue-600">
                <BookOpenCheck className="w-10 h-10" />
@@ -107,22 +149,18 @@ export default function Home() {
             </h2>
             <p className="text-slate-500">
               {isReviewMode 
-                ? "你已经把错题都重做了一遍，是不是感觉清晰多了？"
+                ? "保持这个节奏，继续加油！"
                 : (mistakeIds.length === 0 
-                    ? "你完美的击败了所有题目！" 
-                    : <span className="text-red-500 font-bold">本次共发现 {mistakeIds.length} 个知识盲区。</span>
+                    ? "完美的表现！" 
+                    : <span className="text-red-500 font-bold">本次发现 {mistakeIds.length} 个盲区</span>
                   )
               }
             </p>
           </div>
 
           <div className="pt-4 space-y-3">
-            {/* ✨ 核心功能：如果有错题，且不是在复习模式，显示“攻克错题”按钮 */}
             {!isReviewMode && mistakeIds.length > 0 && (
-              <Button 
-                className="w-full py-6 text-lg bg-orange-600 hover:bg-orange-700" 
-                onClick={startReview}
-              >
+              <Button className="w-full py-6 text-lg bg-orange-600 hover:bg-orange-700" onClick={startReview}>
                 <BookOpenCheck className="w-5 h-5 mr-2" />
                 立即攻克错题 ({mistakeIds.length})
               </Button>
@@ -132,9 +170,10 @@ export default function Home() {
               返回科目大厅
             </Button>
             
-            <Button variant="ghost" className="w-full text-slate-400" onClick={() => { setIsCompleted(false); setCurrentIndex(0); setMistakeIds([]); setIsReviewMode(false); }}>
+            {/* 这个按钮现在会清空硬盘数据 */}
+            <Button variant="ghost" className="w-full text-slate-400" onClick={fullReset}>
               <RotateCcw className="w-4 h-4 mr-2" />
-              重置所有进度
+              清空所有记录
             </Button>
           </div>
         </div>
@@ -142,21 +181,19 @@ export default function Home() {
     );
   }
 
-  // 🟢 场景三：刷题界面
+  // 场景三：刷题界面
   return (
     <main className="min-h-screen bg-slate-50 py-12 px-4 sm:px-6">
       <div className="max-w-3xl mx-auto space-y-8">
         <div className="flex justify-between items-center">
-          <Button variant="ghost" onClick={goBackToLobby} className="text-slate-500">← 放弃</Button>
+          <Button variant="ghost" onClick={goBackToLobby} className="text-slate-500">← 返回大厅</Button>
           <span className="font-bold text-slate-900 text-lg">
             {isReviewMode ? "🎯 错题特训" : `${selectedSubject}专场`}
           </span>
         </div>
 
         <div className="flex justify-between items-center text-sm text-slate-500 px-2">
-          {/* 显示当前的进度 */}
           <span>进度: {currentIndex + 1} / {filteredQuestions.length}</span>
-          
           <div className="flex gap-4">
              {mistakeIds.length > 0 && (
                <span className="text-red-500 font-bold flex items-center">
@@ -175,7 +212,7 @@ export default function Home() {
           />
         ) : (
           <div className="text-center py-20 text-slate-400">
-            {isReviewMode ? "恭喜！错题已全部清空！" : "加载中..."}
+            {isReviewMode ? "恭喜！本轮复习完毕！" : "加载中..."}
           </div>
         )}
 
