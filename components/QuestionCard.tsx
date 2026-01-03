@@ -56,14 +56,21 @@ export default function QuestionCard({ question }: Props) {
               1. 指出我选的这个公式（${question.options[selectedOption]}）错在哪里（比如是不是符号反了？）。
               2. 解释为什么正确答案是 ${question.options[question.correctAnswer]}。
               
-              (请用中文回答，公式请使用 LaTeX 格式)
+              (请用中文回答。⚠️重要：所有公式必须严格使用单个 $ 符号包裹（例如 $E=mc^2$），严禁使用 \[ 或 \] 或 \( \) 等其他格式！)
             `,
           }),
         });
 
         const data = await response.json();
         if (data.reply) {
-          setAiExplanation(data.reply);
+          // 🔧 强制修复：如果 AI 还是用了 \[ \]，我们把它手动变成 $$
+          let cleanReply = data.reply
+            .replace(/\\\[/g, '$$$') // 把 \[ 变成 $$
+            .replace(/\\\]/g, '$$$') // 把 \] 变成 $$
+            .replace(/\\\(/g, '$')   // 把 \( 变成 $
+            .replace(/\\\)/g, '$');  // 把 \) 变成 $
+            
+          setAiExplanation(cleanReply);
         }
       } catch (error) {
         console.error("AI 没反应:", error);
